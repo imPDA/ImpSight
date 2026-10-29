@@ -1,0 +1,73 @@
+<GuiXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/DakJaniels/esoui_gui_xsd/main/esoui_gui_xml.xsd">
+    <Controls>
+        <TopLevelControl name="ImpSight_TLC" mouseEnabled="true" movable="false" resizeToFitDescendents="true" hidden="true" tier="HIGH">
+            <Anchor point="CENTER" offsetX="0" offsetY="-200" />
+
+            <Controls>
+                <Backdrop name="$(parent)BG" centerColor="242931" edgeColor="FFA500" excludeFromResizeToFitExtents="true">  <!-- centerColor="FF8C00" -->
+                <!-- <Backdrop name="$(parent)BG" inherits="ZO_GamepadWhiteSelectorHighlight" alpha="0.85" centerColor="00000000" edgeColor="FFA500" excludeFromResizeToFitExtents="true">  centerColor="FF8C00" -->
+                    <Anchor point="TOPLEFT" offsetX="-8" offsetY="-8" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="8" offsetY="8" />
+                    <Edge edgeSize="4" />
+                </Backdrop>
+
+                <Label name="$(parent)Hint" font="ZoFontGamepad18" color="777777" text="Imagine rounded frame, it will be soon..." excludeFromResizeToFitExtents="true">
+                    <Anchor point="BOTTOM" relativeTo="$(parent)BG" relativePoint="TOP" offsetX="0" offsetY="-4" />
+                </Label>
+
+                <Texture name="$(parent)SearchIcon" textureFile="/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds">
+                    <Dimensions x="36" y="36" />
+                    <Anchor point="LEFT" relativeTo="$(parent)BG" relativePoint="LEFT" offsetX="12" offsetY="0" />
+                </Texture>
+
+                <EditBox name="$(parent)SearchBox" font="ZoFontGamepad34" inherits="ZO_DefaultEditForBackdrop" maxInputCharacters="200">
+                    <Dimensions x="430" y="42" />
+                    <Anchor point="LEFT" relativeTo="$(parent)SearchIcon" relativePoint="RIGHT" offsetX="8" />
+                    <OnTextChanged>
+                        IMP_ImpSight_OnSearchTextChanged(self:GetText())
+                    </OnTextChanged>
+                    <OnFocusLost>
+                        self:SetText()
+                        self:GetParent():SetHidden(true)
+                    </OnFocusLost>
+                    <OnUpArrow>
+                        df('up arrow')
+                    </OnUpArrow>
+                    <OnDownArrow>
+                        df('down arrow')
+                    </OnDownArrow>
+                    <OnEnter>
+                        IMP_ImpSight_OnSearchEnter()
+                        df('enter')
+                        self:LoseFocus()
+                    </OnEnter>
+                </EditBox>
+
+                <Label name="$(parent)Hint2" font="ZoFontGamepad18" color="BBBBBB" text="0.00ms" excludeFromResizeToFitExtents="true">
+                    <Anchor point="RIGHT" relativeTo="$(parent)SearchBox" offsetX="-4" />
+                </Label>
+
+                <Control name="$(parent)SearchResultsContainer" excludeFromResizeToFitExtents="true">
+                    <Anchor point="TOP" relativeTo="$(parent)BG" relativePoint="BOTTOM" offsetX="0" offsetY="8" />
+
+                    <Controls>
+                        <Control name="$(parent)List" keyboardEnabled="true">
+                            <Anchor point="TOP" relativePoint="BOTTOM" />
+                            <Dimensions x="450" />
+                        </Control>
+                    </Controls>
+                </Control>
+            </Controls>
+
+            <OnShow>
+                self:GetNamedChild('SearchBox'):TakeFocus()
+            </OnShow>
+        </TopLevelControl>
+
+        <Texture name="IMP_ImpSight_Hightlight" color="00FF00" alpha="0" hidden="true">
+            <OnInitialized>
+                IMP_ImpSight_InitializeHighlight(self)
+            </OnInitialized>
+        </Texture>
+    </Controls>
+</GuiXml>

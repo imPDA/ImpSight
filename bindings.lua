@@ -1,0 +1,1 @@
+ZO_CreateStringId("SI_BINDING_NAME_IMP_IMPSIGHT_TOGGLE_SEARCH_BOX", "Toggle Search Box")

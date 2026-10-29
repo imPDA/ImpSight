@@ -1,0 +1,9 @@
+<Bindings>
+	<Layer name="SI_KEYBINDINGS_LAYER_GENERAL">
+		<Category name="ImpSight">
+			<Action name="IMP_IMPSIGHT_TOGGLE_SEARCH_BOX">
+				<Up>IMP_ImpSight_ToggleSearchBox()</Up>
+			</Action>
+		</Category>
+	</Layer>
+</Bindings>

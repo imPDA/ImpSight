@@ -1,0 +1,27 @@
+## Title: |cAFD3FFImp|rSight
+## Description: ...
+## Author: |c7c42f2@impda|r
+## AddOnVersion: 1
+## APIVersion: 101051
+## IsLibrary: false
+; ## SavedVariables: ...
+## DependsOn: LibScrollList
+; ## OptionalDependsOn: ...
+
+; fuzzy.lua
+; fuzzy_original.lua
+fuzzy_without_lower.lua
+
+main.lua
+controls.xml
+
+bindings.lua
+bindings.xml
+
+; This Add-on is not created by, affiliated with or sponsored by ZeniMax
+; Media Inc. or its affiliates. The Elder Scrolls® and related logos are
+; registered trademarks or trademarks of ZeniMax Media Inc. in the United
+; States and/or other countries. All rights reserved.
+;
+; You can read the full terms at:
+; https://account.elderscrollsonline.com/add-on-terms
