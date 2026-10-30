@@ -1,58 +1,91 @@
 <GuiXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/DakJaniels/esoui_gui_xsd/main/esoui_gui_xml.xsd">
+    <Font name="IMP_GP_MED_18" font="$(GAMEPAD_MEDIUM_FONT)|$(GP_18)" />
+
     <Controls>
         <TopLevelControl name="ImpSight_TLC" mouseEnabled="true" movable="false" resizeToFitDescendents="true" hidden="true" tier="HIGH">
-            <Anchor point="CENTER" offsetX="0" offsetY="-200" />
+            <Anchor point="TOP" relativePoint="CENTER" offsetX="0" offsetY="-250" />
 
             <Controls>
-                <Backdrop name="$(parent)BG" centerColor="242931" edgeColor="FFA500" excludeFromResizeToFitExtents="true">  <!-- centerColor="FF8C00" -->
-                <!-- <Backdrop name="$(parent)BG" inherits="ZO_GamepadWhiteSelectorHighlight" alpha="0.85" centerColor="00000000" edgeColor="FFA500" excludeFromResizeToFitExtents="true">  centerColor="FF8C00" -->
+                <!-- <Backdrop name="$(parent)BG" centerColor="242931" edgeColor="FFA500" excludeFromResizeToFitExtents="true">
                     <Anchor point="TOPLEFT" offsetX="-8" offsetY="-8" />
                     <Anchor point="BOTTOMRIGHT" offsetX="8" offsetY="8" />
                     <Edge edgeSize="4" />
+                </Backdrop> -->
+
+                <Backdrop name="$(parent)BG" centerColor="242931" edgeColor="242931" level="1" excludeFromResizeToFitExtents="true">
+                    <Edge file="ImpSight/border64.dds" edgeFileWidth="256" edgeFileHeight="32" edgeSize="24" />
+                    <Insets left="24" top="24" right="-24" bottom="-24"/>
+                    <Anchor point="TOPLEFT" offsetX="-8" offsetY="-8" />
+                    <Anchor point="BOTTOMRIGHT" offsetX="8" offsetY="8" />
+
+                    <Controls>
+                        <Backdrop name="$(parent)Outline" centerColor="FFA500" edgeColor="FFA500" level="0" excludeFromResizeToFitExtents="true">
+                            <Edge file="ImpSight/border64.dds" edgeFileWidth="256" edgeFileHeight="32" edgeSize="26" />
+                            <Insets left="26" top="26" right="-26" bottom="-26"/>
+                            <Anchor point="TOPLEFT" offsetX="-2" offsetY="-2" />
+                            <Anchor point="BOTTOMRIGHT" offsetX="2" offsetY="2" />
+                        </Backdrop>
+                    </Controls>
                 </Backdrop>
 
-                <Label name="$(parent)Hint" font="ZoFontGamepad18" color="777777" text="Imagine rounded frame, it will be soon..." excludeFromResizeToFitExtents="true">
+                <Label name="$(parent)Hint" font="IMP_GP_MED_18" color="777777" text="Imagine rounded frame, it will be soon..." excludeFromResizeToFitExtents="true">
                     <Anchor point="BOTTOM" relativeTo="$(parent)BG" relativePoint="TOP" offsetX="0" offsetY="-4" />
+
+                    <OnEffectivelyShown>
+                        self:SetText(os.date("%d.%m.%Y %H:%M", GetTimeStamp()))
+                    </OnEffectivelyShown>
                 </Label>
 
-                <Texture name="$(parent)SearchIcon" textureFile="/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds">
-                    <Dimensions x="36" y="36" />
-                    <Anchor point="LEFT" relativeTo="$(parent)BG" relativePoint="LEFT" offsetX="12" offsetY="0" />
-                </Texture>
+                <Control name="$(parent)SearchBoxContainer" resizeToFitDescendents="true">
+                    <Anchor point="TOP" />
+                    <Controls>
+                        <Texture name="$(parent)SearchIcon" textureFile="/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds" level="1">
+                            <Anchor point="LEFT" offsetX="4" offsetY="0" />
+                            <Dimensions x="36" y="36" />
+                        </Texture>
+                        <EditBox name="$(parent)SearchBox" font="ZoFontGamepad34" inherits="ZO_DefaultEditForBackdrop" maxInputCharacters="200">
+                            <Dimensions x="430" y="42" />
+                            <Anchor point="LEFT" relativeTo="$(parent)SearchIcon" relativePoint="RIGHT" offsetX="8" />
+                            <OnTextChanged>
+                                IMP_ImpSight_OnSearchTextChanged(self:GetText())
+                            </OnTextChanged>
+                            <OnFocusLost>
+                                self:SetText()
+                                self:GetParent():GetParent():SetHidden(true)
+                            </OnFocusLost>
+                            <!-- <OnUpArrow>
+                                df('up arrow')
+                            </OnUpArrow>
+                            <OnDownArrow>
+                                df('down arrow')
+                            </OnDownArrow> -->
+                            <OnEnter>
+                                IMP_ImpSight_OnSearchEnter()
+                                self:LoseFocus()
+                            </OnEnter>
+                            <OnBackspace>
+                                if IsControlKeyDown() then
+                                    local tmp = {}
+                                    for word in self:GetText():gmatch('%S+') do
+                                        tmp[#tmp+1] =  word
+                                    end
+                                    tmp[#tmp] = nil
+                                    self:SetText(table.concat(tmp, ' '))
+                                end
+                            </OnBackspace>
+                        </EditBox>
+                        <Label name="$(parent)Hint2" font="ZoFontGamepad18" color="BBBBBB" text="0.00ms" hidden="true" excludeFromResizeToFitExtents="true">
+                            <Anchor point="RIGHT" relativeTo="$(parent)SearchBox" offsetX="-4" />
+                        </Label>
+                    </Controls>
+                </Control>
 
-                <EditBox name="$(parent)SearchBox" font="ZoFontGamepad34" inherits="ZO_DefaultEditForBackdrop" maxInputCharacters="200">
-                    <Dimensions x="430" y="42" />
-                    <Anchor point="LEFT" relativeTo="$(parent)SearchIcon" relativePoint="RIGHT" offsetX="8" />
-                    <OnTextChanged>
-                        IMP_ImpSight_OnSearchTextChanged(self:GetText())
-                    </OnTextChanged>
-                    <OnFocusLost>
-                        self:SetText()
-                        self:GetParent():SetHidden(true)
-                    </OnFocusLost>
-                    <OnUpArrow>
-                        df('up arrow')
-                    </OnUpArrow>
-                    <OnDownArrow>
-                        df('down arrow')
-                    </OnDownArrow>
-                    <OnEnter>
-                        IMP_ImpSight_OnSearchEnter()
-                        df('enter')
-                        self:LoseFocus()
-                    </OnEnter>
-                </EditBox>
-
-                <Label name="$(parent)Hint2" font="ZoFontGamepad18" color="BBBBBB" text="0.00ms" excludeFromResizeToFitExtents="true">
-                    <Anchor point="RIGHT" relativeTo="$(parent)SearchBox" offsetX="-4" />
-                </Label>
-
-                <Control name="$(parent)SearchResultsContainer" excludeFromResizeToFitExtents="true">
-                    <Anchor point="TOP" relativeTo="$(parent)BG" relativePoint="BOTTOM" offsetX="0" offsetY="8" />
+                <Control name="$(parent)SearchResultsContainer" resizeToFitDescendents="true">
+                    <Anchor point="TOP" relativeTo="$(parent)SearchBoxContainer" relativePoint="BOTTOM" offsetX="0" offsetY="0" />
 
                     <Controls>
                         <Control name="$(parent)List" keyboardEnabled="true">
-                            <Anchor point="TOP" relativePoint="BOTTOM" />
+                            <Anchor point="TOP" />
                             <Dimensions x="450" />
                         </Control>
                     </Controls>
@@ -60,7 +93,7 @@
             </Controls>
 
             <OnShow>
-                self:GetNamedChild('SearchBox'):TakeFocus()
+                self:GetNamedChild('SearchBoxContainerSearchBox'):TakeFocus()
             </OnShow>
         </TopLevelControl>
 

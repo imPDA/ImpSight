@@ -1,4 +1,6 @@
--- local df = function(...) end
+local DEBUG = HashString(GetDisplayName()) == 1558608849
+local df = DEBUG and df or function(...) end
+
 local sub    = string.sub
 local concat = table.concat
 
@@ -178,7 +180,7 @@ function SourceSettings:Gather()
 			text = GetString(text)
 		end
 
-		df('Text is: %s (%s)', tostring(control.data.text), tostring(text))
+		-- df('Text is: %s (%s)', tostring(control.data.text), tostring(text))
 
 		-- strings[text:lower()] = {
 		-- 	data = control.data,
@@ -273,20 +275,19 @@ function SourceSettings:Use(desc)
 	-- have to wait for vertical extents to be calculated, otherwise `verticalExtents > 0` check in
 	-- `ZO_Scroll_ScrollAbsolute` will fail (subcall after `ZO_Scroll_ScrollControlIntoCentralView`)
 
-	local eventNamespaceWaitForScrollExtents = EVENT_NAMESPACE..'SourceSettingsWaitForScrollExtents'
-
-	if select(2, settingsList.scroll:GetScrollExtents()) <= 0 then
-		EVENT_MANAGER:RegisterForUpdate(eventNamespaceWaitForScrollExtents, 0, function()
-			if select(2, settingsList.scroll:GetScrollExtents()) <= 0 then return end
-
-			ZO_Scroll_ScrollControlIntoCentralView(settingsList, control)
-			Highlight:AddTo(control)
-			EVENT_MANAGER:UnregisterForUpdate(eventNamespaceWaitForScrollExtents)
-		end)
-	else
-		Highlight:AddTo(control)
+	local function scrollAndHighlight()
+		-- TODO: scroll first and only then highlight -> use ZO_ScrollList_ScrollDataToCenter
 		ZO_Scroll_ScrollControlIntoCentralView(settingsList, control)
+		Highlight:AddTo(control)
 	end
+
+	local eventNamespaceWaitForScrollExtents = EVENT_NAMESPACE..'SourceSettingsWaitForScrollExtents'
+	EVENT_MANAGER:RegisterForUpdate(eventNamespaceWaitForScrollExtents, 0, function()
+		if select(2, settingsList.scroll:GetScrollExtents()) <= 0 then return end
+		EVENT_MANAGER:UnregisterForUpdate(eventNamespaceWaitForScrollExtents)
+
+		scrollAndHighlight()
+	end)
 end
 
 -- ----------------------------------------------------------------------------
@@ -393,8 +394,12 @@ end
 function SourceSkills:Use(desc)
 	if desc.skillLineId then
 		local skillLineId = desc.skillLineId
-		if self:OpenSkillLine(skillLineId) and desc.skillIndex then
-			self:HighlightSkill(desc.skillIndex)
+		if self:OpenSkillLine(skillLineId) then
+			if desc.skillIndex then
+				self:HighlightSkill(desc.skillIndex)
+			else
+				self:HighlightSkillLineHeader()
+			end
 		end
 	end
 end
@@ -412,12 +417,12 @@ function SourceSkills:OpenSkillLine(skillLineId)
 	local node = SKILLS_WINDOW.skillLineIdToNode[skillLineId]
 
 	if node then  -- TODO: see #subclassing
-		df('There is a skill line node')
+		-- df('There is a skill line node')
 
 		-- if subclassing is opened - close it
 		local selectedData = SKILLS_WINDOW.skillLinesTree:GetSelectedData()
 		if selectedData.isSubclassingNode and SKILLS_WINDOW.skillLinesContainer:IsHidden() then
-			df('Subclassing is opened, have to close first')
+			-- df('Subclassing is opened, have to close first')
 			SKILLS_WINDOW.subclassingPanel:RefreshClassSkillLinesView()
 
 			-- SKILLS_WINDOW.subclassingPanel:MarkRefreshGroupDirty('ResetToClassSkillLines')
@@ -426,7 +431,7 @@ function SourceSkills:OpenSkillLine(skillLineId)
 
 		tree:SelectNode(node)
 	else
-		df('There is no skill line node :(')
+		-- df('There is no skill line node :(')
 
 		local data = SKILLS_DATA_MANAGER:GetSkillLineDataById(skillLineId)
 
@@ -449,7 +454,8 @@ function SourceSkills:OpenSkillLine(skillLineId)
 			local subclassingPanel = SKILLS_WINDOW.subclassingPanel
 			subclassingPanel:ShowSkillsListView(data)
 		else
-			df('Cant open skill line id %d', data.id)
+			-- TODO: detect if skill line not reachable early and show error instead of navigate attempt
+			ZO_Alert(UI_ALERT_CATEGORY_ALERT, SOUNDS.GENERAL_ALERT_ERROR, 'Can\'t open skill line')
 			return
 		end
 	end
@@ -477,6 +483,19 @@ function SourceSkills:HighlightSkill(skillIndex)
 	end
 end
 
+function SourceSkills:HighlightSkillLineHeader()
+	local infoControl
+
+	local subclassingPanelControl = SKILLS_WINDOW.subclassingPanel.control
+	if subclassingPanelControl:IsHidden() then
+		infoControl = ZO_SkillsSkillInfo
+	else
+		infoControl = subclassingPanelControl:GetNamedChild('SkillsListContainerSkillInfo')
+	end
+
+	Highlight:AddTo(infoControl)
+end
+
 -- ----------------------------------------------------------------------------
 
 local SourceKeybindings = {}
@@ -494,7 +513,7 @@ function SourceKeybindings:Gather()
 			local string = kb.data.dataSource.localizedActionName
 			local data = kb.data
 
-			df('String %s, data: %s', string, tostring(data))
+			-- df('String %s, data: %s', string, tostring(data))
 
 			strings[string:lower()] = {
 				string = string,
@@ -558,11 +577,22 @@ function SourceSets:Use(desc)
 	local itemSetCollectionCategoryData = desc.data:GetCategoryData()
 
 	local treeNode = ITEM_SET_COLLECTIONS_BOOK_KEYBOARD.categoryTree:GetTreeNodeByData(itemSetCollectionCategoryData)
-	if treeNode then
-		-- local OPEN = true
-		-- local USER_REQUESTED = true
-		-- self.categoryTree:SetNodeOpen(treeNode, OPEN, USER_REQUESTED)
-		ITEM_SET_COLLECTIONS_BOOK_KEYBOARD.categoryTree:SelectNode(treeNode)
+	if not treeNode then return end
+
+	ITEM_SET_COLLECTIONS_BOOK_KEYBOARD.categoryTree:SelectNode(treeNode)
+
+	local scrollList = ITEM_SET_COLLECTIONS_BOOK_KEYBOARD.gridListPanelList.list
+	local data = ZO_ScrollList_GetDataList(scrollList)
+	for i = 1, #data do
+		local row = data[i]  --[[@diagnostic disable-line: need-check-nil]]
+		if row.typeId == 2 then
+			if row.data.header.dataSource.itemSetId == desc.data.itemSetId then
+				ZO_ScrollList_ScrollDataToCenter(scrollList, i, function()
+					Highlight:AddTo(ZO_ScrollList_GetDataControl(scrollList, row.data))
+				end)
+				break
+			end
+		end
 	end
 end
 
@@ -687,8 +717,11 @@ end
 
 function addon:LayoutSearchResults(rows)
 	local nothingToLayout = #rows == 0
-	self.resultsListControl:SetHidden(nothingToLayout)
-	if nothingToLayout then return end
+
+	if nothingToLayout then
+		self:HideSearchResultsTable()
+		return
+	end
 	-- TODO: nothing found, hide only if nothing in search bar
 
 	local N = math.min(#rows, MAX_ROWS)
@@ -701,6 +734,14 @@ function addon:LayoutSearchResults(rows)
 
 	self.resultsList:ResizeToFitNRows(1, N)
 	self.resultsList:Update(1, data)
+
+	self.resultsListControl:SetAnchorOffsets(0, 8, 1)
+end
+
+function addon:HideSearchResultsTable()
+	-- self.resultsListControl:SetHidden(nothingToLayout)
+	self.resultsListControl:SetHeight(0)
+	self.resultsListControl:SetAnchorOffsets(0, 0, 1)
 end
 
 function addon:GatherSources()
@@ -738,7 +779,7 @@ end
 -- 	return results
 -- end
 
-local FZY = GLOBAL_FZY
+local FZY = GLOBAL_FZY; GLOBAL_FZY = nil
 local CASE_SENSITIVE = true
 function addon:Query(q)
 	-- TODO: replace special characters? in `coup de grAce` for example
@@ -746,7 +787,7 @@ function addon:Query(q)
 
 	local results = FZY.filter(q:lower(), self.haystack, CASE_SENSITIVE)
 
-	local filtered = GetGameTimeSeconds()
+	-- local filtered = GetGameTimeSeconds()
 
 	table.sort(results, function(left, right) return left[3] > right[3] end)
 
@@ -756,8 +797,10 @@ function addon:Query(q)
 	end
 
 	local queryTime = GetGameTimeSeconds() - start
-	local filterTime = filtered - start
-	ImpSight_TLCHint2:SetText(('%.2fms (%d%%)'):format(queryTime * 1000, filterTime / queryTime * 100))
+	-- local filterTime = filtered - start
+	-- ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms (%d%%)'):format(queryTime * 1000, filterTime / queryTime * 100))
+	ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms'):format(queryTime * 1000))
+	ImpSight_TLCSearchBoxContainerHint2:SetHidden(false)
 
 	self.qResults = results
 	self.results = out  -- TODO: reimplement?
@@ -782,8 +825,10 @@ local function OnAddonLoad(_, addonName)
 
     addon:Initialize()
 
-	GLOBAL_IMP_SIGHT = addon
-	if Zgoo then Zgoo:Main(nil, nil, addon) end
+	if DEBUG then
+		GLOBAL_IMP_SIGHT = addon
+		if Zgoo then Zgoo:Main(nil, nil, addon) end
+	end
 end
 
 EVENT_MANAGER:RegisterForEvent(EVENT_NAMESPACE, EVENT_ADD_ON_LOADED, OnAddonLoad)
@@ -810,10 +855,10 @@ local function debouncer(duration)
 end
 
 local searchDebouncer = debouncer(DEBOUNCE_TIME)
-local previousQuery
+local previousQuery = ''
 
 local function searchFunction(text)
-	-- df('Search text: %s', text)
+	-- df('Search text: %s, previous: %s', text, previousQuery)
 
 	local q = text:lower()
 
@@ -845,7 +890,14 @@ function IMP_ImpSight_OnSearchTextChanged(text)
 	text = trim(text)
 
 	if text == '' then
-		addon.resultsListControl:SetHidden(true)
+		-- it makes search box results disappear immediately
+		-- but it is not quite good ide to set previousQuery from two sources
+		-- TODO: fix to follow single responsibility principle
+		addon:HideSearchResultsTable()
+		previousQuery = ''
+
+		-- TODO: same SRP note above
+		ImpSight_TLCSearchBoxContainerHint2:SetHidden(true)
 	end
 
 	searchDebouncer(searchFunction, text)
