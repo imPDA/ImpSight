@@ -28,7 +28,7 @@
                     </Controls>
                 </Backdrop>
 
-                <Label name="$(parent)Hint" font="IMP_GP_MED_18" color="777777" text="Imagine rounded frame, it will be soon..." excludeFromResizeToFitExtents="true">
+                <Label name="$(parent)Hint" font="IMP_GP_MED_18" color="777777" text="-" excludeFromResizeToFitExtents="true">
                     <Anchor point="BOTTOM" relativeTo="$(parent)BG" relativePoint="TOP" offsetX="0" offsetY="-4" />
 
                     <OnEffectivelyShown>

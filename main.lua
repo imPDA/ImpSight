@@ -13,6 +13,7 @@ local SOURCE_ZONES = 2
 local SOURCE_SKILLS = 3
 local SOURCE_KEYBINDINGS = 4
 local SOURCE_SETS = 5
+local SOURCE_SLASH_COMMANDS = 6
 
 local function trim(s)
    return s:match('^%s*(.-)%s*$')
@@ -598,7 +599,39 @@ end
 
 -- ----------------------------------------------------------------------------
 
-local MAX_ROWS = 10 -- TODO: setting?
+local SourceSlashCommands = {}
+SourceSlashCommands.__index = SourceSlashCommands
+
+function SourceSlashCommands:Gather()
+	local strings = {}
+
+	for command in pairs(SLASH_COMMANDS) do
+		strings[command] = {
+			string = command,
+			source = SOURCE_SLASH_COMMANDS,
+		}
+	end
+
+	return strings
+end
+
+function SourceSlashCommands:Use(desc)
+	-- the problem is slash commands can have arguments
+	-- as soon as any argument added search string will no longer treat it as valid command
+	-- because it will not match any
+	-- there should be separate "command" mode, can leave this simple
+	-- but handle commands with arguments by addon itself
+
+	DoCommand(desc.string)
+end
+
+-- ----------------------------------------------------------------------------
+
+-- TODO: setting?
+local MAX_ROWS = 10
+local MAX_CACHE_SIZE = 100
+local MIN_QUERY_TIME_TO_CACHE = 0.001 * 5  -- cache requests longer than N ms
+local MIN_QUERY_LENGTH_TO_CACHE = 2  -- short queries are heavy
 
 local addon = {}
 
@@ -611,6 +644,7 @@ function addon:Initialize()
 		[SOURCE_SKILLS] = SourceSkills,
 		[SOURCE_SETTINGS] = SourceSettings,
 		[SOURCE_KEYBINDINGS] = SourceKeybindings,
+		[SOURCE_SLASH_COMMANDS] = SourceSlashCommands,
 	}
 
 	self:CreateResultTableControl()
@@ -628,6 +662,10 @@ function addon:Initialize()
 
 	self.haystack = haystack
 	self.sourceRef = sourceRef  -- TODO: reimplement #duplicates
+
+	self.cache = {}
+	self.cacheIndicies = {}
+	self.cacheCurrentIndex = 0
 end
 
 function addon:CreateResultTableControl()
@@ -779,30 +817,105 @@ end
 -- 	return results
 -- end
 
+local function starts_with(str, start)
+    return str:sub(1, #start) == start
+end
+
+local function longest_prefix(dict, s)
+    local best
+
+    for i = 1, #s do
+        local prefix = s:sub(1, i)
+        if dict[prefix] then best = prefix end
+    end
+
+    return best
+end
+
 local FZY = GLOBAL_FZY; GLOBAL_FZY = nil
 local CASE_SENSITIVE = true
 function addon:Query(q)
 	-- TODO: replace special characters? in `coup de grAce` for example
 	local start = GetGameTimeSeconds()
 
-	local results = FZY.filter(q:lower(), self.haystack, CASE_SENSITIVE)
+	local filterResults, straws, out = nil, nil, {}
+	local cachedQuery = self.cache[q]
+	if cachedQuery then
+		df('cache hit: %s', q)
+		straws = cachedQuery[1]
+		for i = 1, #straws do
+			local straw = straws[i]
+			out[i] = self.sourceRef[straw]
+		end
 
-	-- local filtered = GetGameTimeSeconds()
+		filterResults = cachedQuery[2]
+	else
+		local cachedPrefix = longest_prefix(self.cache, q)
+		local followUp = self.previousQuery and starts_with(q, self.previousQuery)
 
-	table.sort(results, function(left, right) return left[3] > right[3] end)
+		local haystack
+		if followUp and cachedPrefix then
+			if #self.previousQuery >= #cachedPrefix then
+				df('follow-up: %s +%s', self.previousQuery, q:sub(#self.previousQuery+1))
+				haystack = self.straws
+			else
+				df('cached prefix: %s', cachedPrefix)
+				haystack = self.cache[cachedPrefix][1]
+			end
+		elseif followUp then
+			df('follow-up: %s +%s', self.previousQuery, q:sub(#self.previousQuery+1))
+			haystack = self.straws
+		elseif cachedPrefix then
+			df('cached prefix: %s', cachedPrefix)
+			haystack = self.cache[cachedPrefix][1]
+		else
+			df('cache miss: %s', q)
+			haystack = self.haystack
+		end
 
-	local out = {}
-	for i = 1, #results do
-		out[i] = self.sourceRef[self.haystack[results[i][1]]]
+		filterResults = FZY.filter(q:lower(), haystack, CASE_SENSITIVE)
+
+		-- local filtered = GetGameTimeSeconds()
+
+		table.sort(filterResults, function(left, right) return left[3] > right[3] end)
+
+		straws = {}
+		for i = 1, #filterResults do
+			local straw = haystack[filterResults[i][1]]
+			straws[#straws+1] = straw
+			out[i] = self.sourceRef[straw]
+		end
+	end
+	-- TODO: there is third possibility: cache can contain substring of new query
+
+	local totalQueryTime = GetGameTimeSeconds() - start
+
+	if not cachedQuery and totalQueryTime > MIN_QUERY_TIME_TO_CACHE and #q >= MIN_QUERY_LENGTH_TO_CACHE then
+		if self.cacheCurrentIndex >= MAX_CACHE_SIZE then
+			self.cacheCurrentIndex = 1
+		else
+			self.cacheCurrentIndex = self.cacheCurrentIndex + 1
+		end
+
+		local oldCache = self.cacheIndicies[self.cacheCurrentIndex]
+		if oldCache then
+			self.cache[oldCache] = nil
+		end
+		self.cacheIndicies[self.cacheCurrentIndex] = q
+		self.cache[q] = {straws, filterResults}
+
+		-- df('Cache now at %.1fKB', ApproxCacheMemory(self.cache) / 1024)
 	end
 
-	local queryTime = GetGameTimeSeconds() - start
 	-- local filterTime = filtered - start
 	-- ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms (%d%%)'):format(queryTime * 1000, filterTime / queryTime * 100))
-	ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms'):format(queryTime * 1000))
+	-- ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms'):format(totalQueryTime * 1000))
+	ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms (%dKB)'):format(totalQueryTime * 1000, ApproxCacheMemory(self.cache) / 1024))
 	ImpSight_TLCSearchBoxContainerHint2:SetHidden(false)
 
-	self.qResults = results
+	self.previousQuery = q
+	self.qResults = filterResults
+	self.straws = straws
 	self.results = out  -- TODO: reimplement?
 
 	return out
@@ -814,6 +927,11 @@ function addon:Use(rowIndex)
 	local desc = self.results[rowIndex]
 	if desc then
 		self.sources[desc.source]:Use(desc)
+	else
+		local text = trim(ImpSight_TLCSearchBoxContainerSearchBox:GetText())
+		if text and text ~= '' and text:sub(1, 1) == '/' then  -- treat as slash command
+			DoCommand(text)
+		end
 	end
 end
 
