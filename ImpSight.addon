@@ -4,7 +4,7 @@
 ## AddOnVersion: 1
 ## APIVersion: 101051
 ## IsLibrary: false
-; ## SavedVariables: ...
+## SavedVariables: IMP_ImpSight_SavedVariables
 ## DependsOn: LibScrollList
 ; ## OptionalDependsOn: ...
 

@@ -106,6 +106,17 @@ local function ColorizeIndices(sourceString, indices, colorHex)
     return concat(temp)
 end
 
+local function contiguous_count(tbl)
+	if type(tbl) ~= 'table' then return end
+
+	local i = 1
+	while tbl[i] do
+		i = i + 1
+	end
+
+	return i
+end
+
 
 local Highlight = {}
 Highlight.__index = Highlight
@@ -114,7 +125,7 @@ function Highlight:__init(ctrl)
 	self.control = ctrl
 	self.maxAlpha = 0.2  -- self.control:GetAlpha()
 
-	self.fadeAnim = ZO_AlphaAnimation:New(self.control)
+	self.fadeAnim = ZO_AlphaAnimation:New(self.control)  --[[@diagnostic disable-line: redundant-parameter]]
 	self.fadeAnim:SetMinMaxAlpha(0, self.maxAlpha)
 
 	self.stayDuration = 1000
@@ -193,7 +204,7 @@ function SourceSettings:Gather()
 		_addString(text, control.data, control)
 	end
 
-	-- all different settings (and headers) 
+	-- all different settings (and headers)
 	for panelIndex, controls in pairs(KEYBOARD_OPTIONS.controlTable) do
 		for i = 1, #controls do
 			local control = controls[i]
@@ -619,7 +630,7 @@ function SourceSlashCommands:Use(desc)
 	-- the problem is slash commands can have arguments
 	-- as soon as any argument added search string will no longer treat it as valid command
 	-- because it will not match any
-	-- there should be separate "command" mode, can leave this simple
+	-- there should be separate 'command' mode, can leave this simple
 	-- but handle commands with arguments by addon itself
 
 	DoCommand(desc.string)
@@ -632,10 +643,15 @@ local MAX_ROWS = 10
 local MAX_CACHE_SIZE = 100
 local MIN_QUERY_TIME_TO_CACHE = 0.001 * 5  -- cache requests longer than N ms
 local MIN_QUERY_LENGTH_TO_CACHE = 2  -- short queries are heavy
+local MAX_HISTORY_LENGTH = 10
 
 local addon = {}
 
 function addon:Initialize()
+	self.searchBox = ImpSight_TLC:GetNamedChild('SearchBoxContainerSearchBox')
+	self.hint = ImpSight_TLC:GetNamedChild('SearchBoxContainerHint2')
+	self.historyHint = ImpSight_TLC:GetNamedChild('SearchBoxContainerHint3')
+
 	self.strings = {}
 
 	self.sources = {
@@ -666,6 +682,8 @@ function addon:Initialize()
 	self.cache = {}
 	self.cacheIndicies = {}
 	self.cacheCurrentIndex = 0
+
+	self.history = ZO_SavedVars:NewAccountWide('IMP_ImpSight_SavedVariables', 1, 'history', {})
 end
 
 function addon:CreateResultTableControl()
@@ -754,12 +772,12 @@ function addon:CreateResultTableControl()
 end
 
 function addon:LayoutSearchResults(rows)
-	local nothingToLayout = #rows == 0
+	-- local nothingToLayout = #rows == 0
 
-	if nothingToLayout then
-		self:HideSearchResultsTable()
-		return
-	end
+	-- if nothingToLayout then
+	-- 	self:HideSearchResultsTable()
+	-- 	return
+	-- end
 	-- TODO: nothing found, hide only if nothing in search bar
 
 	local N = math.min(#rows, MAX_ROWS)
@@ -770,16 +788,25 @@ function addon:LayoutSearchResults(rows)
 		data[i] = {ColorizeIndices(rows[i], qResults[i][2], 'FFA500')}
 	end
 
-	self.resultsList:ResizeToFitNRows(1, N)
+	self.resultsList:ResizeToFitNRows(1, #data)
 	self.resultsList:Update(1, data)
-
-	self.resultsListControl:SetAnchorOffsets(0, 8, 1)
+	self:ShowSearchResultsTable()
 end
 
 function addon:HideSearchResultsTable()
 	-- self.resultsListControl:SetHidden(nothingToLayout)
 	self.resultsListControl:SetHeight(0)
 	self.resultsListControl:SetAnchorOffsets(0, 0, 1)
+end
+
+function addon:ShowSearchResultsTable()
+	local dataList = ZO_ScrollList_GetDataList(self.resultsListControl:GetNamedChild('ScrollList'))
+	if #dataList == 0 then
+		self:HideSearchResultsTable()
+	else
+		self.resultsList:ResizeToFitNRows(1, #dataList)
+		self.resultsListControl:SetAnchorOffsets(0, 8, 1)
+	end
 end
 
 function addon:GatherSources()
@@ -886,7 +913,6 @@ function addon:Query(q)
 			out[i] = self.sourceRef[straw]
 		end
 	end
-	-- TODO: there is third possibility: cache can contain substring of new query
 
 	local totalQueryTime = GetGameTimeSeconds() - start
 
@@ -908,10 +934,10 @@ function addon:Query(q)
 	end
 
 	-- local filterTime = filtered - start
-	-- ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms (%d%%)'):format(queryTime * 1000, filterTime / queryTime * 100))
-	-- ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms'):format(totalQueryTime * 1000))
-	ImpSight_TLCSearchBoxContainerHint2:SetText(('%.2fms (%dKB)'):format(totalQueryTime * 1000, ApproxCacheMemory(self.cache) / 1024))
-	ImpSight_TLCSearchBoxContainerHint2:SetHidden(false)
+	-- self.hint:SetText(('%.2fms (%d%%)'):format(queryTime * 1000, filterTime / queryTime * 100))
+	-- self.hint:SetText(('%.2fms'):format(totalQueryTime * 1000))
+	self.hint:SetText(('%.2fms (%dKB)'):format(totalQueryTime * 1000, ApproxCacheMemory(self.cache) / 1024))
+	self.hint:SetHidden(false)
 
 	self.previousQuery = q
 	self.qResults = filterResults
@@ -922,15 +948,116 @@ function addon:Query(q)
 end
 
 function addon:Use(rowIndex)
-	rowIndex = rowIndex or 1
+	-- TODO: if rowIndex == nil then return end #rowIndex
+	if self.searchBox:GetText() == '' then return end
 
-	local desc = self.results[rowIndex]
+	local desc
+	if self.inHistory then
+		desc = self.sourceRef[self.history[self.historyPointer]]
+		self:AddToHistory(self.history[self.historyPointer])
+	else
+		rowIndex = rowIndex or 1  -- TODO: #rowIndex
+		desc = self.results[rowIndex]
+		self:AddToHistory(self.straws[rowIndex])  -- TODO: seems fragile
+	end
+
 	if desc then
 		self.sources[desc.source]:Use(desc)
 	else
-		local text = trim(ImpSight_TLCSearchBoxContainerSearchBox:GetText())
+		local text = trim(self.searchBox:GetText())
 		if text and text ~= '' and text:sub(1, 1) == '/' then  -- treat as slash command
 			DoCommand(text)
+		end
+	end
+end
+
+function addon:SetInput(text, suppressCallbacks)
+	self.searchBox:SetText(text, suppressCallbacks)
+
+	local noInput = text == ''
+
+	if noInput or self.inHistory then
+		self.hint:SetHidden(true)
+		self:HideSearchResultsTable()
+	else
+		self.hint:SetHidden(true)
+		self:ShowSearchResultsTable()
+	end
+end
+
+function addon:EnterHistory()
+	self.inHistory = true
+	local input = self.searchBox:GetText()
+	self.savedInput = input
+	self:HideSearchResultsTable()
+	self.hint:SetHidden(true)
+	self.historyPointer = self:GetHistoryLength()
+end
+
+function addon:ExitHistory(returnToSavedInput)
+	self.inHistory = false
+	self.historyHint:SetHidden(true)
+
+	if returnToSavedInput and self.savedInput then
+		self:SetInput(self.savedInput)
+		self.savedInput = nil
+	end
+end
+
+function addon:GetHistoryLength()
+	return #getmetatable(self.history).__index
+end
+
+function addon:AddToHistory(str)
+	local raw = getmetatable(self.history).__index
+
+	for i = 1, #raw do
+		if raw[i] == str then
+			table.remove(raw, i)
+			break
+		end
+	end
+
+	if #raw >= MAX_HISTORY_LENGTH then
+		table.remove(raw, 1)
+	end
+
+	raw[#raw+1] = str
+end
+
+local SUPPRESS_CALLBACK = true
+function addon:NavigateHistory(direction)
+	self.historyPointer = self.historyPointer + direction
+	local str = self.history[self.historyPointer]
+	local desc = self.sourceRef[str]
+	local text = desc and desc.string or str
+
+	self:SetInput(text, SUPPRESS_CALLBACK)
+	self.historyHint:SetText(('History: %d/%d'):format(self:GetHistoryLength() - self.historyPointer + 1, self:GetHistoryLength()))
+	self.historyHint:SetHidden(false)
+end
+
+function addon:OnUpArrow()
+	df('Up arrow, inHistory: %s, history length: %d', tostring(self.inHistory), self:GetHistoryLength())
+
+	if self.inHistory then
+		if self.historyPointer > 1 then
+			self:NavigateHistory(-1)
+		end
+	elseif self:GetHistoryLength() > 0 then
+		self:EnterHistory()
+		self:NavigateHistory(0)
+	end
+end
+
+function addon:OnDownArrow()
+	df('Down arrow, inHistory: %s', tostring(self.inHistory))
+
+	if self.inHistory then
+		if self.historyPointer < self:GetHistoryLength() then
+			self:NavigateHistory(1)
+		else
+			self:ExitHistory(true)
 		end
 	end
 end
@@ -1005,6 +1132,8 @@ function IMP_ImpSight_OnSearchTextChanged(text)
 
 	-- TODO: do not search if search bar is hidden
 
+	addon:ExitHistory()
+
 	text = trim(text)
 
 	if text == '' then
@@ -1012,10 +1141,11 @@ function IMP_ImpSight_OnSearchTextChanged(text)
 		-- but it is not quite good ide to set previousQuery from two sources
 		-- TODO: fix to follow single responsibility principle
 		addon:HideSearchResultsTable()
+		addon.resultsList:Update(1, {})
 		previousQuery = ''
 
 		-- TODO: same SRP note above
-		ImpSight_TLCSearchBoxContainerHint2:SetHidden(true)
+		addon.hint:SetHidden(true)
 	end
 
 	searchDebouncer(searchFunction, text)
@@ -1032,4 +1162,17 @@ end
 
 function IMP_ImpSight_InitializeHighlight(ctrl)
 	Highlight:__init(ctrl)
+end
+
+function IMP_ImpSight_OnSearchDownArrow()
+	addon:OnDownArrow()
+end
+
+function IMP_ImpSight_OnSearchUpArrow()
+	addon:OnUpArrow()
+end
+
+function IMP_ImpSight_OnSearchHidden()
+	addon.inHistory = false
+	addon.savedInput = nil
 end

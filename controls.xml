@@ -53,12 +53,12 @@
                                 self:SetText()
                                 self:GetParent():GetParent():SetHidden(true)
                             </OnFocusLost>
-                            <!-- <OnUpArrow>
-                                df('up arrow')
+                            <OnUpArrow>
+                                IMP_ImpSight_OnSearchUpArrow()
                             </OnUpArrow>
                             <OnDownArrow>
-                                df('down arrow')
-                            </OnDownArrow> -->
+                                IMP_ImpSight_OnSearchDownArrow()
+                            </OnDownArrow>
                             <OnEnter>
                                 IMP_ImpSight_OnSearchEnter()
                                 self:LoseFocus()
@@ -73,20 +73,30 @@
                                     self:SetText(table.concat(tmp, ' '))
                                 end
                             </OnBackspace>
+                            <OnEffectivelyHidden>
+                                IMP_ImpSight_OnSearchHidden()
+                            </OnEffectivelyHidden>
                         </EditBox>
-                        <Label name="$(parent)Hint2" font="ZoFontGamepad18" color="BBBBBB" text="0.00ms" hidden="true" excludeFromResizeToFitExtents="true">
+                        <Label name="$(parent)Hint2" font="ZoFontGamepad18" color="BBBBBB" text="-" hidden="true" excludeFromResizeToFitExtents="true">
+                            <Anchor point="RIGHT" relativeTo="$(parent)SearchBox" offsetX="-4" />
+                        </Label>
+                        <Label name="$(parent)Hint3" font="ZoFontGamepad18" color="BBBBBB" text="-" hidden="true" excludeFromResizeToFitExtents="true">
                             <Anchor point="RIGHT" relativeTo="$(parent)SearchBox" offsetX="-4" />
                         </Label>
                     </Controls>
                 </Control>
 
                 <Control name="$(parent)SearchResultsContainer" resizeToFitDescendents="true">
-                    <Anchor point="TOP" relativeTo="$(parent)SearchBoxContainer" relativePoint="BOTTOM" offsetX="0" offsetY="0" />
+                    <!-- <Anchor point="TOP" relativeTo="$(parent)SearchBoxContainer" relativePoint="BOTTOM" offsetX="0" offsetY="0" /> -->
+                    <Anchor point="TOPLEFT" relativeTo="$(parent)SearchBoxContainer" relativePoint="BOTTOMLEFT" offsetX="10" offsetY="0" />
+                    <Anchor point="TOPRIGHT" relativeTo="$(parent)SearchBoxContainer" relativePoint="BOTTOMRIGHT" offsetX="-10" offsetY="0" />
 
                     <Controls>
                         <Control name="$(parent)List" keyboardEnabled="true">
-                            <Anchor point="TOP" />
-                            <Dimensions x="450" />
+                            <!-- <Anchor point="TOP" /> -->
+                            <Anchor point="TOPLEFT" />
+                            <Anchor point="TOPRIGHT" />
+                            <!-- <Dimensions x="450" /> -->
                         </Control>
                     </Controls>
                 </Control>

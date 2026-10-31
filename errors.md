@@ -12,3 +12,7 @@ user:/AddOns/ImpSight/main.lua:636: in function 'addon:Use'
 user:/AddOns/ImpSight/main.lua:715: in function 'IMP_ImpSight_OnSearchEnter'
 ImpSight_TLCSearchBox_Enter:3: in function '(main chunk)'
 	<Locals> self = ud </Locals>
+
+### 2
+
+Does not show icons in history
